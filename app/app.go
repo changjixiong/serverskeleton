@@ -22,10 +22,13 @@ func handleSignal() {
 }
 
 func main() {
-	tcpConn := &net.TCPConnection{}
-	tcpConn.Run(":8090")
-	wsConn := &net.WSConnection{}
-	wsConn.Run(":8080")
+
+	tcpServer := &net.TPCServer{}
+	wsServer := &net.WSServer{}
+
+	server := &net.ServerManager{}
+	server.ListenAndServe(tcpServer, ":8090")
+	server.ListenAndServe(wsServer, ":8080")
 
 	handleSignal()
 }

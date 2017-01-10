@@ -7,7 +7,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type Client struct {
+type WSServer struct {
 }
 
 type WSConnection struct {
@@ -19,7 +19,7 @@ type WSConnection struct {
 }
 
 var upgrader = websocket.Upgrader{} // use default options
-func (ws *WSConnection) serve(w http.ResponseWriter, r *http.Request) {
+func (ws *WSServer) serve(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print("upgrade:", err)
@@ -38,9 +38,14 @@ func (ws *WSConnection) serve(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (ws *WSConnection) Run(Addr string) {
-	http.HandleFunc("/serve", ws.serve)
-	log.Fatal(http.ListenAndServe(Addr, nil))
+func (ws *WSServer) Run(Addr string) {
+
+	mux := &http.ServeMux{}
+
+	mux.HandleFunc("/serve", ws.serve)
+	server := &http.Server{Addr: Addr, Handler: mux}
+	server.ListenAndServe()
+
 }
 
 func (ws *WSConnection) read() {

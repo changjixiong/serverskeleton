@@ -8,14 +8,17 @@ import (
 	"time"
 )
 
+type TPCServer struct {
+}
+
 type TCPConnection struct {
 	SendBuf chan []byte
 	ReadBuf chan []byte
 	Conn    net.Conn
-	client  *Client
+	Client  *Client
 }
 
-func (c *TCPConnection) Run(addr string) {
+func (s *TPCServer) Run(addr string) {
 
 	go func() {
 		ln, err := net.Listen("tcp", addr)
@@ -52,13 +55,16 @@ func (c *TCPConnection) Run(addr string) {
 
 			tempDelay = 0
 
-			c.Conn = rw
-			c.SendBuf = make(chan []byte, 10)
-			c.ReadBuf = make(chan []byte, 10)
-			c.client = &Client{}
+			conn := &TCPConnection{
+				Conn:    rw,
+				SendBuf: make(chan []byte, 10),
+				ReadBuf: make(chan []byte, 10),
+				Client:  &Client{},
+			}
 
-			go c.read()
-			go c.send()
+			go conn.read()
+			go conn.send()
+
 		}
 	}()
 }
