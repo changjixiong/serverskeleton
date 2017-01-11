@@ -32,7 +32,7 @@ func main() {
 
 		switch err {
 		case nil:
-			fmt.Printf("recv %d:%s", n, string(buf))
+			fmt.Printf("recv %d:%s\n", n, string(buf))
 		case io.EOF:
 			fmt.Println("detected closed LAN connection")
 			return

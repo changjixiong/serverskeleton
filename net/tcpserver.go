@@ -5,20 +5,32 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"serverskeleton/parser"
 	"time"
 )
 
 type TPCServer struct {
+	MethodMap map[string]*parser.MethodInfo
+}
+
+func (t *TPCServer) RegisterMethod(v interface{}) {
+
+	parser.RegisterMethod(t.MethodMap, v)
+
 }
 
 type TCPConnection struct {
-	SendBuf chan []byte
-	ReadBuf chan []byte
-	Conn    net.Conn
-	Client  *Client
+	SendBuf      chan *parser.Response
+	ReadBuf      chan []byte
+	Conn         net.Conn
+	messageType  int
+	client       *Client
+	isClosed     bool
+	MethodMap    map[string]*parser.MethodInfo
+	sendTryTimes int
 }
 
-func (s *TPCServer) Run(addr string) {
+func (t *TPCServer) Run(addr string) {
 
 	go func() {
 		ln, err := net.Listen("tcp", addr)
@@ -56,10 +68,12 @@ func (s *TPCServer) Run(addr string) {
 			tempDelay = 0
 
 			conn := &TCPConnection{
-				Conn:    rw,
-				SendBuf: make(chan []byte, 10),
-				ReadBuf: make(chan []byte, 10),
-				Client:  &Client{},
+				Conn:         rw,
+				SendBuf:      make(chan *parser.Response, 10),
+				ReadBuf:      make(chan []byte, 10),
+				client:       &Client{},
+				MethodMap:    t.MethodMap,
+				sendTryTimes: 10,
 			}
 
 			go conn.read()
@@ -68,16 +82,41 @@ func (s *TPCServer) Run(addr string) {
 		}
 	}()
 }
-func (c *TCPConnection) read() {
+
+func (t *TCPConnection) translate(data []byte) {
+	req, ok := parser.GenRequest(data)
+
+	if !ok {
+		t.write(parser.GenErrRespones(parser.ErrorCode_JsonError))
+
+	} else {
+		t.handle(req)
+	}
+
+}
+
+func (t *TCPConnection) close() {
+
+	close(t.ReadBuf)
+	close(t.SendBuf)
+	t.Conn.Close()
+
+}
+
+func (t *TCPConnection) read() {
+	defer t.close()
 	buf := make([]byte, 1024)
-	defer c.Conn.Close()
 
 	for {
-		n, err := c.Conn.Read(buf)
-		// fmt.Println("recv:", string(buf[0:n]))
+		if t.isClosed {
+			return
+		}
+
+		n, err := t.Conn.Read(buf)
 		switch err {
 		case nil:
-			c.handle(buf[0:n])
+			// c.handle(buf[0:n])
+			t.translate(buf[0:n])
 
 		case io.EOF:
 			fmt.Printf("Warning: End of data: %s \n", err)
@@ -89,14 +128,52 @@ func (c *TCPConnection) read() {
 	}
 }
 
-func (c *TCPConnection) handle(msg []byte) {
-	c.SendBuf <- msg
+func (t *TCPConnection) handle(req *parser.Request) {
+
+	resp := parser.Invoke(t.MethodMap, req, t.client)
+
+	t.SendBuf <- resp
+
 }
-func (c *TCPConnection) send() {
+
+func (t *TCPConnection) write(resp *parser.Response) {
+	t.SendBuf <- resp
+}
+func (t *TCPConnection) send() {
+
+	defer func() {
+		t.isClosed = true
+	}()
+
 	for {
-		respon := <-c.SendBuf
+
+		respon, ok := <-t.SendBuf
+		if !ok {
+			// c.Conn.Write(kickclient)
+			return
+		}
+
 		data, _ := json.Marshal(&respon)
-		c.Conn.Write(data)
+
+		haveTryTimes := 0
+		for len(data) > 0 && haveTryTimes < t.sendTryTimes {
+			n, err := t.Conn.Write(data)
+
+			if nil != err {
+				fmt.Println("t.Conn.Write:", err)
+				return
+			}
+			data = data[n:]
+			haveTryTimes += 1
+		}
+
+		if haveTryTimes >= t.sendTryTimes {
+			return
+		}
+		if respon.FuncName == "Error" {
+			return
+		}
+
 	}
 
 }

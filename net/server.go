@@ -1,6 +1,7 @@
 package net
 
 type Client struct {
+	Name string
 }
 
 type ServerManager struct {

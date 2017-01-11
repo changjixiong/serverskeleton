@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"serverskeleton/module"
 	"serverskeleton/net"
+	"serverskeleton/parser"
 	"syscall"
 )
 
@@ -23,8 +25,11 @@ func handleSignal() {
 
 func main() {
 
-	tcpServer := &net.TPCServer{}
-	wsServer := &net.WSServer{}
+	tcpServer := &net.TPCServer{MethodMap: make(map[string]*parser.MethodInfo)}
+	tcpServer.RegisterMethod(module.DefaultPlayerModule)
+
+	wsServer := &net.WSServer{MethodMap: make(map[string]*parser.MethodInfo)}
+	wsServer.RegisterMethod(module.DefaultPlayerModule)
 
 	server := &net.ServerManager{}
 	server.ListenAndServe(tcpServer, ":8090")
